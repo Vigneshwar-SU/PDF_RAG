@@ -1,32 +1,36 @@
-from fastapi import FastAPI, UploadFile, File
+from fastapi import FastAPI, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
-from backend.rag import answer_question
-import shutil
-import os
+from backend.rag import answer_question_from_pdf
 
 app = FastAPI()
 
-# Allow frontend access
+# Enable CORS for frontend access
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=["*"],  # Allows all origins
+    allow_credentials=True,
+    allow_methods=["*"],  # Allows all methods
+    allow_headers=["*"],  # Allows all headers
 )
 
-UPLOAD_DIR = "uploads"
-os.makedirs(UPLOAD_DIR, exist_ok=True)
+@app.post("/upload-ask")
+async def upload_and_ask(
+    file: UploadFile = File(...),
+    question: str = Form(...)
+):
+    """
+    Single endpoint that handles both PDF upload and question answering.
+    """
+    try:
+        answer = answer_question_from_pdf(file, question)
+        return {"answer": answer}
+    except Exception as e:
+        return {"error": str(e), "answer": "Sorry, I couldn't process your question. Please try again."}
 
-@app.post("/upload-pdf")
-async def upload_pdf(file: UploadFile = File(...)):
-    file_path = os.path.join(UPLOAD_DIR, file.filename)
-    with open(file_path, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
+@app.get("/")
+async def root():
+    return {"message": "PDF Q&A API is running"}
 
-    return {"message": "PDF uploaded successfully"}
-
-@app.post("/ask")
-async def ask_question(data: dict):
-    question = data.get("question")
-    answer = answer_question(question)
-    return {"answer": answer}
+@app.get("/health")
+async def health():
+    return {"status": "healthy"}
